@@ -148,16 +148,20 @@ def decode_payload(payload, header):
     if w == 0 or h == 0:
         raise ValueError("Zero-dimension frame (ack/keepalive)")
 
-    # Stacked frames are ZIP-compressed RGB
+    # Stacked frames are ZIP-compressed RGB; S30 preview can also be
+    # ZIP-compressed single-channel (Bayer) with data_type=3.
     if _ZIP_LOCAL_SIG in payload:
         raw = _decompress_payload(payload)
-        expected = h * w * 3 * 2
-        if len(raw) != expected:
-            raise ValueError(
-                f"Decompressed size {len(raw)} != expected {expected} "
-                f"({w}x{h}x3x2)"
-            )
-        return np.frombuffer(raw, dtype=np.uint16).reshape((h, w, 3))
+        expected_rgb = h * w * 3 * 2
+        expected_bayer = h * w * 2
+        if len(raw) == expected_rgb:
+            return np.frombuffer(raw, dtype=np.uint16).reshape((h, w, 3))
+        if len(raw) == expected_bayer:
+            return np.frombuffer(raw, dtype=np.uint16).reshape((h, w))
+        raise ValueError(
+            f"Decompressed size {len(raw)} != expected {expected_rgb} "
+            f"(RGB) or {expected_bayer} (Bayer) for {w}x{h}"
+        )
 
     # Preview frames are raw 16-bit single-channel (Bayer)
     expected_bayer = h * w * 2
@@ -477,8 +481,8 @@ def _consume_json_line(sock, first_byte):
 # ---------------------------------------------------------------------------
 
 def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
-                   filename=None, *, max_ack_frames=10, fallback=True,
-                   read_timeout=30.0):
+                   filename=None, *, begin_streaming=True, max_ack_frames=10,
+                   fallback=True, read_timeout=30.0):
     """Connect, grab a single image frame, and disconnect.
 
     This is the simplest way to get the current live-stacked image from
@@ -508,6 +512,11 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
     filename : str, optional
         If provided, save the image to this path.  The extension
         determines the format (``.png``, ``.jpg``, ``.fits``, etc.).
+    begin_streaming : bool, optional
+        If ``True`` (default), send ``begin_streaming`` on the image
+        socket before requesting a frame and ``stop_streaming`` on
+        exit.  Required on current firmware (7.75+) to avoid connection
+        resets when grabbing preview frames via ``get_current_img``.
     max_ack_frames : int, optional
         Maximum number of zero-dimension ack/keepalive frames to skip
         past while waiting for a real image frame (default ``10``).
@@ -555,6 +564,9 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
     sock = _make_socket(ip, port)
     sock.settimeout(read_timeout)
     try:
+        if begin_streaming:
+            _send_json(sock, "begin_streaming")
+
         # Try the requested method first; fall back to "get_current_img"
         # on the same socket if asked and the first method yields nothing.
         methods = [method]
@@ -579,6 +591,11 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
                 f"width={getattr(last_header, 'get', lambda *_: None)('width')}"
             )
     finally:
+        if begin_streaming:
+            try:
+                _send_json(sock, "stop_streaming")
+            except OSError:
+                pass
         sock.close()
 
     if filename is not None:
@@ -997,6 +1014,147 @@ def stop_stream(session):
         The session to stop.
     """
     session.stop()
+
+
+# ---------------------------------------------------------------------------
+# RTSP one-shot capture
+# ---------------------------------------------------------------------------
+
+def capture_rtsp_frame(ip=None, port=RTSP_PORT, filename=None,
+                       transport="tcp", timeout=30):
+    """Grab a single frame from the Seestar RTSP live feed.
+
+    Uses ``ffmpeg`` to decode one H.264 frame.  This is the reliable
+    way to capture the **wide-angle camera** in scenery mode (port
+    :data:`RTSP_PORT_WIDE`, 4555) after :func:`seestarpy.wide.start_scenery_view`.
+
+    Parameters
+    ----------
+    ip : str, optional
+        Seestar IP address.
+    port : int, optional
+        RTSP port.  Default :data:`RTSP_PORT` (4554, telephoto).
+        Use :data:`RTSP_PORT_WIDE` (4555) for the wide camera.
+    filename : str
+        Output image path (``.jpg`` or ``.png``).
+    transport : str, optional
+        RTSP transport passed to ffmpeg (default ``"tcp"``).
+    timeout : float, optional
+        Subprocess timeout in seconds.
+
+    Returns
+    -------
+    str
+        The *filename* written.
+
+    Raises
+    ------
+    RuntimeError
+        If ``ffmpeg`` is missing or exits with an error.
+    FileNotFoundError
+        If *filename* was not created.
+    """
+    import shutil
+    import subprocess
+
+    if ip is None:
+        ip = DEFAULT_IP
+    if filename is None:
+        raise ValueError("filename is required")
+
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise RuntimeError(
+            "ffmpeg not found on PATH — install ffmpeg to capture RTSP frames"
+        )
+
+    url = build_rtsp_url(ip=ip, port=port)
+    cmd = [
+        ffmpeg, "-y",
+        "-rtsp_transport", transport,
+        "-i", url,
+        "-frames:v", "1",
+        filename,
+    ]
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=timeout,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg failed (rc={result.returncode}): "
+            f"{result.stderr.strip()[-500:]}"
+        )
+    if not os.path.isfile(filename):
+        raise FileNotFoundError(f"ffmpeg did not create {filename!r}")
+    return filename
+
+
+def get_wide_live_image(ip=None, filename=None, *, mode="auto",
+                        method="get_current_img", read_timeout=30.0):
+    """Capture one frame from the S30/S30 Pro wide-angle camera.
+
+    On current firmware the wide camera behaves differently by mode:
+
+    - **scenery** — wide RTSP on port :data:`RTSP_PORT_WIDE` (4555).
+      Call :func:`seestarpy.wide.start_scenery_view` first, or pass
+      ``mode="scenery"`` here (which starts scenery view automatically).
+    - **star** — stacked/preview binary stream on :data:`IMAGE_PORT_WIDE`
+      (4804).  Requires ``SecondView`` to be in ``ContinuousExposure``
+      (not just ``Sleep``); use :func:`seestarpy.wide.prepare_star_wide`
+      beforehand.
+
+    Parameters
+    ----------
+    ip : str, optional
+        Seestar IP address.
+    filename : str, optional
+        If given, save the frame to this path.
+    mode : str, optional
+        ``"auto"`` (default) picks scenery/RTSP when ``SecondView`` is in
+        an RTSP stage, otherwise tries port 4804.
+        ``"scenery"`` forces RTSP capture (starts scenery view if needed).
+        ``"star"`` forces the 4804 binary stream.
+    method : str, optional
+        JSON-RPC method for the star-mode binary grab (default
+        ``"get_current_img"``).
+    read_timeout : float, optional
+        Socket read timeout for star-mode capture.
+
+    Returns
+    -------
+    tuple
+        For star mode: ``(header, payload)`` like :func:`get_live_image`.
+        For scenery/RTSP: ``({"width": None, "height": None,
+        "source": "rtsp"}, filename)`` — dimensions are unknown without
+        decoding the JPEG/PNG.
+    """
+    from . import wide
+
+    if ip is None:
+        ip = DEFAULT_IP
+
+    if mode not in ("auto", "scenery", "star"):
+        raise ValueError(f"mode must be 'auto', 'scenery', or 'star', got {mode!r}")
+
+    second = wide.get_second_view_state()
+    stage = (second or {}).get("stage")
+    use_rtsp = mode == "scenery" or (mode == "auto" and stage == "RTSP")
+
+    if use_rtsp:
+        if stage != "RTSP":
+            wide.start_scenery_view()
+            time.sleep(2)
+        if filename is None:
+            filename = "wide_rtsp_frame.jpg"
+        capture_rtsp_frame(ip=ip, port=RTSP_PORT_WIDE, filename=filename)
+        return {"width": None, "height": None, "source": "rtsp", "path": filename}, filename
+
+    wide.prepare_star_wide()
+    header, payload = get_live_image(
+        ip=ip, port=IMAGE_PORT_WIDE, method=method, filename=filename,
+        begin_streaming=True, fallback=False, read_timeout=read_timeout,
+    )
+    return header, payload
 
 
 # ---------------------------------------------------------------------------

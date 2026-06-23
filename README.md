@@ -1,6 +1,8 @@
 ![SeeStar-Py](docs/_static/seestar_py_logo_banner.png)
 A light-weight python module to drive the Seestar smart telescopes
 
+Based on [seestarpy](https://github.com/astronomyk/seestarpy) by [Kieran Leschinski](https://github.com/astronomyk).
+
 This package is on ReadTheDocs. See [seestarpy.readthedocs.io](https://seestarpy.readthedocs.io/en/latest/)
 
 If you've found the package useful - how about [buying me a coffee](https://buymeacoffee.com/kdleschinsf), to keep the creative juices flowing ;)
