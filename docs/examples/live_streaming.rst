@@ -65,6 +65,29 @@ PixInsight, Siril, etc.), just change the extension:
     FITS output requires ``astropy``.  Install it with
     ``pip install astropy``.
 
+On firmware 7.75+, ``get_live_image`` sends ``begin_streaming`` on the image
+socket before requesting a frame and ``stop_streaming`` on exit.  Pass
+``begin_streaming=False`` only if you are managing the socket lifecycle
+yourself.
+
+
+Bayer demosaic on save
+----------------------
+
+Preview frames are 16-bit Bayer mosaics.  By default ``save_image`` duplicates
+the single channel into pseudo-RGB before stretch.  To demosaic first (requires
+OpenCV):
+
+.. code-block:: python
+
+    from seestarpy import postprocess as pp
+
+    stream.get_live_image(
+        filename="preview.png",
+        method="get_current_img",
+        postprocess=pp.POSTPROCESS_DEBAYER,
+    )
+
 
 Working with the raw pixel data
 -------------------------------
@@ -190,3 +213,10 @@ Or in Python with OpenCV:
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
     cap.release()
+
+
+S30 wide camera
+---------------
+
+See :doc:`wide_camera` for dual-camera S30 / S30 Pro helpers and RTSP capture
+on port 4555.

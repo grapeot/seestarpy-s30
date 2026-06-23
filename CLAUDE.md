@@ -2,15 +2,16 @@
 
 ## What is this project?
 
-**seestarpy** is a Python SDK for controlling ZWO Seestar S50 smart
-telescopes over TCP.  The Seestar exposes a JSON-RPC API on port 4700 and
-a binary image streaming protocol on ports 4800/4804.  This library wraps
-both into a clean Python interface.
+**seestarpy** is a Python SDK for controlling ZWO Seestar smart
+telescopes over TCP (S50, S30 / S30 Pro, and related models).  The Seestar
+exposes a JSON-RPC API on port 4700 and a binary image streaming protocol
+on ports 4800/4804.  This library wraps both into a clean Python interface.
 
-- **PyPI**: `pip install seestarpy`
-- **Docs**: https://seestarpy.readthedocs.io
+- **Repo**: https://github.com/grapeot/seestarpy-s30
+- **Docs**: https://grapeot.github.io/seestarpy-s30/
+- **Upstream**: https://github.com/astronomyk/seestarpy
 - **Python**: >= 3.11, built with Hatchling
-- **Author**: Kieran Leschinski
+- **Original author**: Kieran Leschinski
 
 ## Repository layout
 
@@ -24,6 +25,8 @@ src/seestarpy/
   plan.py              Observation plan commands (set_view_plan, stop, get status)
   stack.py             Batch stacking commands (set/start/stop/clear/status)
   stream.py            Binary image streaming (ports 4800/4804), matplotlib live display
+  wide.py              S30 / S30 Pro dual-camera helpers (SecondView, wide_cam)
+  postprocess.py       Bayer demosaic options for preview save/display
   data.py              SMB file operations (list/download FITS from Seestar storage)
   cli.py               Click-based CLI entry point (`seestar` command)
   coordintate_utils.py RA/Dec to Alt/Az conversion
@@ -62,7 +65,7 @@ Two payload formats exist:
 - **Stacked frames** (img_type=5): ZIP-compressed 16-bit RGB (48bpp).
   Decompress by finding `PK\x03\x04`, parsing the ZIP local-file header,
   then `zlib.decompress(data, -15)`.
-- **Preview frames** (img_type=1): Raw 16-bit Bayer (uncompressed, single channel).
+- **Preview frames** (img_type=1): Raw 16-bit Bayer, or ZIP-compressed Bayer/RGB on S30.
 - **Ack frames** (img_type=0): Tiny keepalives, skip them.
 
 The same socket carries both binary frames AND JSON-RPC heartbeat responses.
@@ -82,28 +85,28 @@ The reader syncs on the magic number and skips JSON lines starting with `{`.
 ## Testing
 
 ```bash
-pytest                                    # unit tests only
-pytest -m integration                     # requires live Seestar
-pytest -m sequence                        # multi-step observation sequences
+pytest --ignore=tests/integration          # unit tests (CI runs this)
+pytest -m integration                      # requires live Seestar
+pytest -m sequence                         # multi-step observation sequences
 ```
 
-Tests live in `tests/`.  Integration tests need a Seestar on the network.
-No CI/CD pipeline exists yet — only ReadTheDocs for doc builds.
+Tests live in `tests/`.  Integration tests need a Seestar on the network and
+are auto-skipped when none is reachable.
+
+**CI:** GitHub Actions runs unit tests on every push/PR
+(``.github/workflows/unit-tests.yml``).  Integration tests are excluded.
 
 ## Documentation
 
-Sphinx with `sphinx_rtd_theme`.  Build with:
+Sphinx with `sphinx_rtd_theme`.  Build locally:
 
 ```bash
-cd docs && make html
+pip install -e ".[docs,image]"
+sphinx-build -b html docs docs/_build/html
 ```
 
-- `docs/api/` — `automodule` pages (one per module)
-- `docs/examples/` — Tutorials (connection, observing, streaming, etc.)
-- `docs/info/` — Protocol references (error codes, packet capture, image stream)
-
-When adding a new module: create `docs/api/<module>.rst` with `automodule`,
-add it to `docs/api/api_index.rst`, and add example pages to `docs/index.rst`.
+Published to **GitHub Pages** on every push to `master`
+(``.github/workflows/docs.yml`` → https://grapeot.github.io/seestarpy-s30/).
 
 ## Firmware protocol notes
 

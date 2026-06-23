@@ -1,16 +1,23 @@
 ![SeeStar-Py](docs/_static/seestar_py_logo_banner.png)
 A light-weight python module to drive the Seestar smart telescopes
 
+[![Unit tests](https://github.com/grapeot/seestarpy-s30/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/grapeot/seestarpy-s30/actions/workflows/unit-tests.yml)
+[![Docs](https://github.com/grapeot/seestarpy-s30/actions/workflows/docs.yml/badge.svg)](https://grapeot.github.io/seestarpy-s30/)
+
 Based on [seestarpy](https://github.com/astronomyk/seestarpy) by [Kieran Leschinski](https://github.com/astronomyk).
 
-This package is on ReadTheDocs. See [seestarpy.readthedocs.io](https://seestarpy.readthedocs.io/en/latest/)
+**Documentation:** [grapeot.github.io/seestarpy-s30](https://grapeot.github.io/seestarpy-s30/)
+
+Install from this repository:
+
+    pip install git+https://github.com/grapeot/seestarpy-s30.git
 
 If you've found the package useful - how about [buying me a coffee](https://buymeacoffee.com/kdleschinsf), to keep the creative juices flowing ;)
 
 
 > **Version compatibility**
 >
-> seestarpy **0.5.0+** targets the **Seestar app v3.2.0 / firmware v7.75**
+> seestarpy **0.5.1+** targets the **Seestar app v3.2.0 / firmware v7.75**
 > generation. The onboard batch-stacking workflow (`stack`, `crowdsky`)
 > sends sub-frame paths in the form firmware v7.75 requires; on earlier
 > firmware that format is not guaranteed to work.
@@ -19,12 +26,16 @@ If you've found the package useful - how about [buying me a coffee](https://buym
 > install a previous release instead: `pip install "seestarpy<0.5"`.
 >
 > Firmware 7.18+ also requires authentication — see the
-> [authentication docs](https://seestarpy.readthedocs.io/en/latest/info/authentication.html).
+> [authentication docs](https://grapeot.github.io/seestarpy-s30/info/authentication.html).
 
 
 Quickstart
 ----------
-Install `seestarpy` using pip:
+Install from GitHub:
+
+    $ pip install git+https://github.com/grapeot/seestarpy-s30.git
+
+Or install upstream from PyPI:
 
     $ pip install seestarpy
 
