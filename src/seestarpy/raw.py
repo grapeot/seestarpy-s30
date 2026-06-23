@@ -1052,6 +1052,28 @@ def iscope_stop_view(stage=None):
 
 
 @multiple_ips
+def set_stack_type(stack_type):
+    """
+    Set the stacking profile before :func:`iscope_start_stack`.
+
+    Used by seestar_alp for ``DeepSky``, ``SolarSystem``, and ``MilkyWay``
+    (wide-angle Milky Way mode on S30).  Some firmware builds return
+    ``code: 209`` (invalid value) if the type is unsupported.
+
+    Parameters
+    ----------
+    stack_type : str
+        One of ``"DeepSky"``, ``"SolarSystem"``, ``"MilkyWay"``.
+
+    Returns
+    -------
+    dict
+    """
+    params = {"method": "set_stack_type", "params": {"type": stack_type}}
+    return send_command(params)
+
+
+@multiple_ips
 def iscope_start_stack(restart=False):
     """
     Start stacking sub-frames on the current target.
