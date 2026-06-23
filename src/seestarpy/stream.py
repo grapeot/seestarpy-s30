@@ -174,7 +174,8 @@ def decode_payload(payload, header):
     )
 
 
-def save_image(payload, header, path, stretch=True):
+def save_image(payload, header, path, stretch=True, postprocess="raw",
+               bayer_pattern=None):
     """Decode a frame payload and save it as an image file.
 
     For ``.fits`` files, the full 16-bit RGB data is saved as a FITS
@@ -195,19 +196,31 @@ def save_image(payload, header, path, stretch=True):
         Apply an aggressive auto-stretch to bring out faint detail
         (default ``True``).  Set to ``False`` for a simple linear
         16-to-8-bit scale.  Ignored for FITS output.
+    postprocess : str, optional
+        How to turn Bayer preview frames into RGB before save:
+        ``"raw"`` (default, pseudo-RGB) or ``"debayer"``.  See
+        :mod:`seestarpy.postprocess`.
+    bayer_pattern : str, optional
+        Bayer layout when ``postprocess="debayer"`` (``"GR"``, ``"RG"``,
+        ``"GB"``, ``"BG"``).  Defaults to
+        :data:`postprocess.DEFAULT_BAYER_PATTERN`.
 
     Raises
     ------
     ImportError
         If required libraries are not installed (NumPy always; Pillow
-        for image formats; astropy for FITS).
+        for image formats; astropy for FITS; OpenCV for debayer).
     """
+    from . import postprocess as pp
+
     ext = os.path.splitext(path)[1].lower()
 
     if ext in ('.fits', '.fit'):
         _save_fits(payload, header, path)
     else:
-        _save_image_pil(payload, header, path, stretch)
+        if bayer_pattern is None:
+            bayer_pattern = pp.DEFAULT_BAYER_PATTERN
+        _save_image_pil(payload, header, path, stretch, postprocess, bayer_pattern)
 
 
 def _save_fits(payload, header, path):
@@ -226,16 +239,18 @@ def _save_fits(payload, header, path):
     hdu.writeto(path, overwrite=True)
 
 
-def _save_image_pil(payload, header, path, stretch):
+def _save_image_pil(payload, header, path, stretch, postprocess="raw",
+                    bayer_pattern="BG"):
     """Save as a Pillow-supported format (PNG, JPEG, TIFF, ...)."""
     import numpy as np
     from PIL import Image
 
-    arr = decode_payload(payload, header)
+    from . import postprocess as pp
 
-    if arr.ndim == 2:
-        # Single-channel Bayer → stack to RGB for consistent processing
-        arr = np.stack([arr, arr, arr], axis=2)
+    arr = decode_payload(payload, header)
+    arr = pp.postprocess_pixels(
+        arr, mode=postprocess, bayer_pattern=bayer_pattern,
+    )
 
     if stretch:
         arr8 = _auto_stretch(arr)
@@ -482,7 +497,8 @@ def _consume_json_line(sock, first_byte):
 
 def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
                    filename=None, *, begin_streaming=True, max_ack_frames=10,
-                   fallback=True, read_timeout=30.0):
+                   fallback=True, read_timeout=30.0, postprocess="raw",
+                   bayer_pattern=None):
     """Connect, grab a single image frame, and disconnect.
 
     This is the simplest way to get the current live-stacked image from
@@ -532,6 +548,12 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
         how long we'll wait for any single frame; raises
         ``socket.timeout`` if the Seestar goes silent.  The default is
         sized to comfortably cover the 8MP S30 Pro frames over Wi-Fi.
+    postprocess : str, optional
+        Passed to :func:`save_image` when *filename* is set.  ``"raw"``
+        (default) or ``"debayer"``.
+    bayer_pattern : str, optional
+        Bayer layout for debayer postprocess.  See
+        :mod:`seestarpy.postprocess`.
 
     Returns
     -------
@@ -599,7 +621,10 @@ def get_live_image(ip=None, port=IMAGE_PORT, method="get_stacked_img",
         sock.close()
 
     if filename is not None:
-        save_image(payload, header, filename)
+        save_image(
+            payload, header, filename,
+            postprocess=postprocess, bayer_pattern=bayer_pattern,
+        )
 
     return header, payload
 
