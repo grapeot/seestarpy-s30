@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.5.1 — 2026-06-23
+
+> **Repository:** maintained at
+> [grapeot/seestarpy-s30](https://github.com/grapeot/seestarpy-s30).
+> Based on [astronomyk/seestarpy](https://github.com/astronomyk/seestarpy).
+
+### Image streaming (firmware 7.75+)
+
+- **`stream.get_live_image`** — Sends ``begin_streaming`` / ``stop_streaming``
+  on the image socket by default.  Required on current firmware to avoid
+  connection resets when grabbing preview frames.
+- **`stream.decode_payload`** — Accepts ZIP-compressed 16-bit Bayer previews
+  (S30-family devices) in addition to ZIP-compressed RGB stacked frames.
+
+### S30 wide camera
+
+- **`seestarpy.wide`** — Helpers for dual-camera S30 / S30 Pro devices:
+  enable/switch wide camera, read ``SecondView`` app state, scenery and
+  star-mode preparation.
+- **`stream.capture_rtsp_frame`** / **`stream.get_wide_live_image`** —
+  One-shot wide capture via RTSP (scenery) or port 4804 (star).
+- **`raw.set_stack_type`** — JSON-RPC wrapper used by seestar_alp
+  (``DeepSky``, ``SolarSystem``, ``MilkyWay``).
+
+### Preview post-processing
+
+- **`seestarpy.postprocess`** — Optional Bayer demosaic before stretch/save.
+  Pass ``postprocess="debayer"`` to :func:`stream.save_image` /
+  :func:`stream.get_live_image` (requires OpenCV).
+
+### Tooling
+
+- **GitHub Actions** — Unit-test workflow (``pytest --ignore=tests/integration``).
+- **GitHub Pages** — Sphinx docs built and published on every push to
+  ``master`` (https://grapeot.github.io/seestarpy-s30/).
+
 ## v0.5.0 — 2026-06-16
 
 > **Compatibility:** this release targets the **Seestar app v3.2.0 /

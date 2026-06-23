@@ -11,6 +11,8 @@ Python API index
    stack
    crowdsky
    stream
+   wide
+   postprocess
    data
    status
    events

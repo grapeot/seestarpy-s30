@@ -13,7 +13,11 @@ sys.path.insert(0, os.path.abspath('../src'))
 project = 'SeeStar-Py'
 copyright = '2025, Kieran Leschinski'
 author = 'Kieran Leschinski'
-release = 'v0.3.0'
+release = '0.5.1'
+
+_docs_baseurl = os.environ.get('DOCS_BASEURL')
+if _docs_baseurl:
+    html_baseurl = _docs_baseurl
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

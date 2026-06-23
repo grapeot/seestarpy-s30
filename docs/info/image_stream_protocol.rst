@@ -144,6 +144,12 @@ For a standard S50: 1920 × 1080 × 2 = 4,147,200 bytes.  The
 
     np.frombuffer(payload, dtype=np.uint16).reshape((height, width))
 
+On S30-family devices, preview frames may arrive **ZIP-compressed** even
+when ``img_type=1``.  After decompression the payload can be either 16-bit
+RGB (``height × width × 3 × 2`` bytes) or 16-bit Bayer
+(``height × width × 2`` bytes).  :func:`~seestarpy.stream.decode_payload`
+handles both.
+
 Ack / keepalive frames (img_type=0)
 """"""""""""""""""""""""""""""""""""
 
